@@ -1,0 +1,11 @@
+# One-step deterministic predictor: shared_lora with sigma fixed at 1 and zero initial latents, so one Euler step
+# maps the image straight to the target (E2E-FT / Lotus recipe for diffusion-based dense prediction). Removes the
+# sampling randomness behind colour drift, and makes eval ~40x cheaper (1 step instead of 40).
+# Eval needs num_inference_steps 1 and init_noise zeros (written into the checkpoint; make_eval_configs sets them).
+method:
+  type: lora
+  rank: 64
+  alpha: 64
+objective:
+  type: onestep
+  zero_noise: true

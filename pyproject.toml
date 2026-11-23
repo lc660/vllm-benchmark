@@ -26,6 +26,13 @@ dependencies = [
   "h5py>=3.16.0",
 ]
 
+[project.optional-dependencies]
+# Fine-tuning (finetune/): `uv sync --extra finetune`. Evaluating a fine-tuned checkpoint also needs it.
+finetune = [
+  "peft>=0.17",
+  "safetensors>=0.4",
+]
+
 [project.scripts]
 visionbench = "visionbench.cli:main"
 

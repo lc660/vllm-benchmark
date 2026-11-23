@@ -1,0 +1,13 @@
+# Quick end-to-end check of the loop on one GPU (~10 minutes incl. encoding): 20 steps on NYUv2 depth, tiny val.
+# python -m finetune.encode smoke && python -m finetune.train smoke --fresh
+data:
+  tasks: [depth]
+  sources: [nyuv2]
+  val_per_group: 4
+train:
+  max_steps: 20
+  grad_accum: 1
+  warmup_steps: 0
+  log_every: 1
+  val_every: 10
+  save_every: 10

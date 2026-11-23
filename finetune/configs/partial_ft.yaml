@@ -1,0 +1,10 @@
+# Partial full fine-tuning: the last 4 of 32 blocks + output head trained with full weights (~0.9B params),
+# everything else frozen. Contrasts "few full weights at the output end" with "low-rank everywhere".
+# Fits one 48 GB GPU with 8-bit Adam. Needs a bf16 transformer at eval.
+method:
+  type: partial
+  partial: {last_blocks: 4, modules: [norm_out, proj_out]}
+train:
+  lr: 1.0e-5
+  optimizer: adamw8bit
+  weight_decay: 0.01

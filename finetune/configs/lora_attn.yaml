@@ -1,0 +1,7 @@
+# Capacity ablation: the diffusers default LoRA (rank 16, attention projections only, 17M params).
+# Answers "is a small adapter enough to fix colours / depth direction?" at a fraction of the memory.
+method:
+  type: lora
+  rank: 16
+  alpha: 16
+  targets: [to_q, to_k, to_v, to_out.0]

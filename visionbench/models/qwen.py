@@ -24,6 +24,7 @@ from .base import FatalModelError, GenerationOutput, SampleModelError
 
 LargePrecision = Literal["bf16", "fp16", "int8", "nf4"]
 VaePrecision = Literal["fp32", "bf16", "fp16"]
+InitNoise = Literal["gaussian", "zeros"]
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,13 @@ class QwenConfig:
     num_inference_steps: int = 40
     true_cfg_scale: float = 1.0
     negative_prompt: str | None = None
+    # Fine-tuned weights (finetune/ checkpoints, visionbench/models/adapters.py format). None = the base model.
+    adapter_path: str | None = None
+    adapter_scale: float = 1.0
+    # "zeros" starts sampling from zero latents instead of noise: required by one-step (objective onestep) checkpoints.
+    init_noise: InitNoise = "gaussian"
+    # Refuse to sample a checkpoint with other steps / initial noise than it was trained for (see adapter_config.json).
+    check_adapter_inference: bool = True
 
     def __post_init__(self) -> None:
         if not self.model_id.strip():
@@ -67,6 +75,12 @@ class QwenConfig:
             raise ValueError("true_cfg_scale must be non-negative")
         if self.true_cfg_scale > 1 and not self.negative_prompt:
             raise ValueError("true_cfg_scale > 1 requires a non-empty negative_prompt")
+        if self.init_noise not in {"gaussian", "zeros"}:
+            raise ValueError(f"unsupported init_noise: {self.init_noise}")
+        if self.adapter_path is not None and not str(self.adapter_path).strip():
+            raise ValueError("adapter_path must be a checkpoint directory or null")
+        if self.adapter_scale <= 0:
+            raise ValueError("adapter_scale must be positive")
 
     @classmethod
     def vram_16gb(
@@ -94,6 +108,7 @@ class QwenBackend:
         self.config = config
         self._pipe: Any | None = None
         self._torch: Any | None = None
+        self._adapter: dict | None = None
 
     @staticmethod
     def _dtype(torch: Any, precision: str) -> Any:
@@ -177,6 +192,8 @@ class QwenBackend:
                 ),
                 **transformer_load,
             )
+            if cfg.adapter_path is not None:
+                self._adapter = self._apply_adapter(transformer)
             text_encoder_load = dict(common)
             text_encoder_device_map = self._quantized_device_map(
                 cfg.text_encoder_precision, cfg.device
@@ -220,10 +237,41 @@ class QwenBackend:
                 )
         except torch.OutOfMemoryError as exc:
             raise FatalModelError("GPU out of memory while loading Qwen-Image; settings were not changed") from exc
+        except FatalModelError:
+            raise
         except Exception as exc:
             raise FatalModelError(f"failed to load pinned Qwen checkpoint: {exc}") from exc
         self._torch = torch
         self._pipe = pipe
+
+    def _apply_adapter(self, transformer: Any) -> dict:
+        """Load fine-tuned weights into the transformer before it is placed on the device."""
+        from . import adapters
+
+        cfg = self.config
+        path = Path(str(cfg.adapter_path)).expanduser()
+        try:
+            adapter = adapters.read_config(path)
+        except (FileNotFoundError, ValueError) as exc:
+            raise FatalModelError(str(exc)) from exc
+        expected = adapter.get("inference") or {}
+        if cfg.check_adapter_inference and expected:
+            actual = {"num_inference_steps": cfg.num_inference_steps, "init_noise": cfg.init_noise}
+            wrong = {k: (actual[k], v) for k, v in expected.items() if k in actual and actual[k] != v}
+            if wrong:
+                details = ", ".join(f"{k}={got!r} but the checkpoint needs {want!r}" for k, (got, want) in wrong.items())
+                raise FatalModelError(f"{path}: {details}. Set these model options (finetune.make_eval_configs does), "
+                                      "or check_adapter_inference: false to sample it anyway")
+        base = adapter.get("base_model") or {}
+        if base.get("revision") and base["revision"] != cfg.revision:
+            raise FatalModelError(f"{path} was trained on revision {base['revision']}, this run loads {cfg.revision}")
+        try:
+            adapters.load(transformer, path, scale=cfg.adapter_scale,
+                          quantized=cfg.transformer_precision in {"int8", "nf4"})
+        except ValueError as exc:
+            raise FatalModelError(f"cannot apply {path}: {exc}") from exc
+        return {"adapter_path": str(path.resolve()), "method": adapter["method"], "step": adapter.get("step"),
+                "run": adapter.get("run")}
 
     def generate(
         self, image: Image.Image, prompt: str, system_prompt: str, seed: int | None
@@ -250,6 +298,12 @@ class QwenBackend:
         }
         if self.config.negative_prompt is not None:
             kwargs["negative_prompt"] = self.config.negative_prompt
+        if self.config.init_noise == "zeros":
+            # Packed latents (1, tokens, channels); one token per 16 x 16 pixels, as the pipeline packs them.
+            channels = self._pipe.transformer.config.in_channels
+            tokens = (image.height // 16) * (image.width // 16)
+            kwargs["latents"] = self._torch.zeros(
+                (1, tokens, channels), device=self.config.device, dtype=self._torch.bfloat16)
         try:
             result = self._pipe(**kwargs)
             output = result.images[0]
@@ -266,6 +320,7 @@ class QwenBackend:
                 "revision": self.config.revision,
                 "seed": seed,
                 "qwen_config": serialized_config,
+                "adapter": self._adapter,
             },
         )
 

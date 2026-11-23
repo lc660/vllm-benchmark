@@ -220,9 +220,8 @@ All are run with `uv run visionbench run --config configs/<name>.yaml`. On AWS (
 | `coco_pose_qwen.yaml` (lc660's) | COCO val2017, 1,593 images | pose *preservation*: a check of editing ability, not a training task (7.9) |
 
 To evaluate a fine-tuned model: copy the config, set a new `generation_version` (outputs and resume state are
-keyed by it), and point the model at the checkpoint. **The Qwen backend (`visionbench/models/qwen.py`) cannot
-load LoRA weights yet**; that needs to be added (e.g. `pipe.load_lora_weights(...)` behind a new model option)
-before fine-tuned checkpoints can be scored.
+keyed by it), and point the model at the checkpoint with `model.options.adapter_path`.
+`python -m finetune.make_eval_configs <checkpoint>` does all of this for every test set (see `finetune/README.md`).
 
 ### 6.2 Zero-shot baselines (Qwen-Image 2.1, 40 steps, bf16, seed 42)
 

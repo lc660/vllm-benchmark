@@ -1,0 +1,10 @@
+# LoKr (LyCORIS): each update is a Kronecker product W1 (16x16) x W2. With W2 kept as a full matrix (rank above
+# half its size, so PEFT does not split it) the update is full rank, for only 27M params in total.
+# Often the strongest PEFT choice for large DiTs. Needs a bf16 transformer at eval (make_eval_configs switches it).
+method:
+  type: lokr
+  rank: 100000        # >= half of W2's size: PEFT keeps W2 full instead of splitting it into two low-rank factors
+  alpha: 100000       # PEFT scales LoKr by alpha / rank, so alpha = rank gives scale 1
+  lokr: {decompose_factor: 16, decompose_both: false}
+train:
+  lr: 2.0e-4

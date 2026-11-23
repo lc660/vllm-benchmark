@@ -1,0 +1,6 @@
+# DoRA: LoRA plus a learned per-channel magnitude (Liu et al., 2024). Same targets / rank as shared_lora, so the
+# comparison isolates the decomposition. ~10-20% slower per step than LoRA.
+method:
+  type: dora
+  rank: 64
+  alpha: 64

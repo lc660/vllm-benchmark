@@ -11,3 +11,5 @@ dist/
 assets/
 raw/
 data/
+runs/
+configs/finetuned/

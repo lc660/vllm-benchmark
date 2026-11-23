@@ -1,0 +1,63 @@
+# Defaults for every fine-tuning run. An experiment YAML (or --set key=value) is deep-merged over this file.
+# Every key is documented in finetune/README.md, section 4.
+
+name: null                       # run name; output goes to <output_root>/<name>. Defaults to the YAML's file name
+output_root: runs
+
+model:
+  id: Qwen/Qwen-Image-2.1
+  revision: 790c92633540aa0cb11d9abf19eb46d861714758   # the revision every zero-shot baseline used
+  cache_dir: model-cache         # relative to the repo root (eval configs use ../model-cache from configs/)
+  transformer_precision: bf16    # bf16 | nf4 (QLoRA: base weights in 4 bit, adapters in fp32)
+  output_resolution: 1024        # the pipeline resizes condition images to ~this^2 pixels; must match eval (default)
+
+method:
+  type: lora                     # lora | dora | lokr | loha | partial
+  rank: 64
+  alpha: 64                      # PEFT scale = alpha / rank
+  dropout: 0.0
+  targets: [to_q, to_k, to_v, to_out.0, img_mlp.proj, img_mlp.gate_layer, img_mlp.out]
+  lokr: {decompose_factor: -1, decompose_both: false}   # method lokr only (PEFT LoKrConfig fields)
+  partial: {last_blocks: 4, modules: [norm_out, proj_out]}   # method partial only: unfrozen full weights
+
+objective:
+  type: flow                     # flow: the model's own flow-matching loss, sampled with 40 steps at eval
+                                 # onestep: always sigma = 1, so the model becomes a one-step predictor (eval: 1 step)
+  timestep_sampling: logit_normal  # logit_normal | uniform | mode (flow only)
+  logit_mean: 0.0
+  logit_std: 1.0
+  mode_scale: 1.29
+  shift: null                    # null = unshifted sigmas (as diffusers' trainer); auto = the shift the sampler
+                                 # applies for this image size at inference; or a number, e.g. 3.0
+  zero_noise: true               # onestep only: start from zeros instead of Gaussian noise (deterministic output)
+
+data:
+  finetune_data: {}              # any finetune_data option (finetune_data/README.md section 4), e.g. task weights
+  tasks: null                    # shortcut: restrict to these tasks, e.g. [depth]
+  sources: null                  # shortcut: restrict to these sources, e.g. [nyuv2]
+  val_per_group: 10              # val images per (task, source) for the validation loss (x3 timesteps)
+
+train:
+  max_steps: 3000                # optimizer steps
+  batch_size: 1                  # samples per forward pass; >1 only works when samples share size AND prompt
+  grad_accum: 4                  # effective batch = batch_size * grad_accum
+  optimizer: adamw               # adamw | adamw8bit (bitsandbytes)
+  lr: 1.0e-4
+  weight_decay: 0.0
+  betas: [0.9, 0.999]
+  lr_scheduler: constant_with_warmup   # any diffusers.optimization scheduler, e.g. cosine
+  warmup_steps: 100
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  trainable_dtype: fp32          # dtype of the trained tensors (base weights stay bf16 / nf4)
+  seed: 0
+  log_every: 10
+  val_every: 250                 # validation loss per task, keeps the best checkpoint in <run>/best
+  save_every: 500                # also keeps <run>/step-<n> for every save
+  device: cuda
+
+encode:
+  mode: cache                    # cache: precompute once to disk (python -m finetune.encode) | online: every step
+  cache_dir: data/finetune_cache # ~1-3 MB per sample (text embeddings + two latents)
+  text_encoder_cpu_offload: true # online mode: keep the 17 GB Qwen3-VL encoder in CPU RAM between calls
+  vae_precision: bf16            # as the eval configs

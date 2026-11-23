@@ -1,0 +1,10 @@
+# QLoRA: shared_lora on a 4-bit NF4 base, for 24 GB GPUs (A10G / g5). The adapter can be evaluated on the NF4 base
+# (vram_16gb profile) or on bf16. Slower per step than bf16 (dequantisation) but same recipe as shared_lora.
+model:
+  transformer_precision: nf4
+method:
+  type: lora
+  rank: 64
+  alpha: 64
+train:
+  optimizer: adamw8bit

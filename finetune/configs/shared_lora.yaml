@@ -1,0 +1,6 @@
+# MAIN RUN. One LoRA on the balanced mix of all four tasks (the task is chosen by the instruction), the open
+# analogue of Vision Banana's instruction tuning. Rank 64 on attention + MLP of all 32 blocks (168M params, 2.4% of the 7B transformer).
+method:
+  type: lora
+  rank: 64
+  alpha: 64
