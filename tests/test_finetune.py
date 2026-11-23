@@ -251,9 +251,17 @@ def test_adapter_scale_zero_point_five_halves_a_lora_update(tmp_path: Path) -> N
     for scale in (0.0001, 0.5, 1.0):
         _, fresh = _tiny()
         adapters.load(fresh, tmp_path / "c", scale=scale)
+        # The whole transformer is nonlinear, so its final prediction need not be
+        # monotonic in adapter scale.  The first LoRA target itself is linear,
+        # which lets this test check the actual scale contract deterministically.
+        target = fresh.transformer_blocks[0].attn.to_q
+        captured = []
+        handle = target.register_forward_hook(lambda _module, _inputs, output: captured.append(output.detach()))
         with torch.no_grad():
-            outputs[scale] = objectives.predict(fresh, noisy, sample, sig)
-    # the LoRA delta is linear in the scale at the first layer; the full network is not, so only check ordering
+            objectives.predict(fresh, noisy, sample, sig)
+        handle.remove()
+        assert len(captured) == 1
+        outputs[scale] = captured[0]
     d_half = (outputs[0.5] - outputs[0.0001]).abs().mean()
     d_full = (outputs[1.0] - outputs[0.0001]).abs().mean()
     assert 0 < d_half < d_full
