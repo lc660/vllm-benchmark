@@ -65,6 +65,14 @@ def test_lokr_config_is_full_rank_at_unit_scale() -> None:
     assert options["r"] >= 12288 // 16 / 2  # PEFT keeps W2 unsplit (full rank) when r >= max(W2 dims) / 2
 
 
+def test_loha_config_matches_shared_lora_budget_at_unit_scale() -> None:
+    """LoHa rank r trains 2r(m+n) params per layer, LoRA rank 2r trains the same: the comparison is at equal size."""
+    loha, lora = cfg.load("loha")["method"], cfg.load("shared_lora")["method"]
+    options = methods.peft_options(loha)
+    assert options["alpha"] / options["r"] == 1.0
+    assert 2 * options["r"] == lora["rank"] and options["target_modules"] == list(lora["targets"])
+
+
 def test_dataset_config_applies_task_and_source_shortcuts() -> None:
     config = cfg.load("smoke")
     data = cfg.dataset_config(config, "val")

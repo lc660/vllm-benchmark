@@ -20,6 +20,7 @@ outputs are cached once. Trainable parameter counts are computed from the layer 
 | `lora_attn` | LoRA r16 | attention projections only (diffusers default) | 17M | capacity: is a small adapter enough? |
 | `dora` | DoRA r64 | LoRA + learned per-channel magnitude | ~170M | same rank as `shared_lora`, isolates the decomposition |
 | `lokr` | LoKr | Kronecker-factored, **full-rank** update | 27M | full rank for few parameters; often strongest on big DiTs |
+| `loha` | LoHa r32 | Hadamard product of two rank-32 updates on attention + MLP, all 32 blocks | 168M | same parameters as `shared_lora`, but the update can reach rank 1024 |
 | `partial_ft` | partial full FT | full weights of the last 4 blocks + output head | 906M | "few full weights at the end" vs "low rank everywhere" |
 | `qlora` | QLoRA | `shared_lora` on a 4-bit NF4 base | 168M | the recipe on 24 GB GPUs (A10G / g5) |
 | `onestep_lora` | LoRA r64, one-step objective | as `shared_lora`, with sigma fixed at 1 and zero noise | 168M | deterministic one-step predictor (E2E-FT / Lotus); 40x cheaper eval |
@@ -74,7 +75,7 @@ Suggested order. Each step is useful on its own.
 3. **`shared_lora`**: the main result, on all test sets.
 4. **Per-task ablation** `lora_segmentation`, `lora_depth`, `lora_normals`, `lora_pose`, compared with
    `shared_lora` per test set.
-5. **Method comparison** at the same data and steps: `lora_attn`, `dora`, `lokr`, `partial_ft`, `onestep_lora`
+5. **Method comparison** at the same data and steps: `lora_attn`, `dora`, `lokr`, `loha`, `partial_ft`, `onestep_lora`
    (and `qlora` if only 24 GB GPUs are available).
 
 For every checkpoint, also report the pose-preservation check (`coco_pose_qwen`), which `make_eval_configs` always

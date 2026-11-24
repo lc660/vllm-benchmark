@@ -1,0 +1,11 @@
+# LoHa (LyCORIS): each update is the Hadamard product of two low-rank updates, dW = (A1 B1) * (A2 B2).
+# Rank 32 has exactly the parameters of shared_lora's LoRA r64 (168M, same targets), but the update can reach
+# rank 32^2 = 1024, so the comparison isolates "low rank" vs "high rank at the same budget".
+# PEFT builds the full dW of every targeted layer in each forward pass: slower per step and more memory than LoRA
+# (read s_per_step / max_mem_gb off a smoke run). Needs a bf16 transformer at eval (make_eval_configs switches it).
+method:
+  type: loha
+  rank: 32
+  alpha: 32           # PEFT scales LoHa by alpha / rank, so alpha = rank gives scale 1
+train:
+  lr: 1.0e-4          # starting point, not tuned
