@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-EXPERIMENTS=${EXPERIMENTS:-"shared_lora lora_segmentation lora_depth lora_normals lora_pose lora_attn dora lokr partial_ft onestep_lora"}
+EXPERIMENTS=${EXPERIMENTS:-"shared_lora lora_segmentation lora_depth lora_normals lora_pose lora_attn dora lokr loha partial_ft onestep_lora"}
 GPUS=${GPUS:-$(nvidia-smi --query-gpu=index --format=csv,noheader | tr '\n' ' ')}
 PY=${PY:-"uv run --extra finetune python"}
 
